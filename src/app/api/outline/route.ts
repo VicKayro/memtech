@@ -4,6 +4,8 @@ import { callClaudeJSON } from '@/lib/anthropic';
 import { OUTLINE_SYSTEM, outlinePrompt } from '@/lib/prompts';
 import type { OutlineSection } from '@/types';
 
+export const maxDuration = 120;
+
 export async function POST(req: Request) {
   const { project_id } = await req.json();
 

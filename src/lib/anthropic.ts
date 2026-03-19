@@ -34,5 +34,14 @@ export async function callClaudeJSON<T>(
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const jsonStr = jsonMatch ? jsonMatch[1].trim() : text.trim();
 
-  return JSON.parse(jsonStr) as T;
+  try {
+    return JSON.parse(jsonStr) as T;
+  } catch {
+    // If Claude didn't return valid JSON, try to find JSON object in the text
+    const objectMatch = text.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      return JSON.parse(objectMatch[0]) as T;
+    }
+    throw new Error(`Réponse Claude non-JSON: ${text.slice(0, 200)}`);
+  }
 }
