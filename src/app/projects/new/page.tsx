@@ -51,9 +51,12 @@ export default function NewProject() {
           }
           documents.push({ name: file.name, content });
         } catch (err) {
+          const errMsg = err instanceof Error ? err.message : 'Erreur inconnue';
+          console.error(`[memtech] Erreur parsing ${file.name}:`, err);
+          setError(`Erreur sur ${file.name}: ${errMsg}`);
           documents.push({
             name: file.name,
-            content: `[ERREUR EXTRACTION: ${err instanceof Error ? err.message : 'Erreur'}]`,
+            content: `[ERREUR EXTRACTION: ${errMsg}]`,
           });
         }
       }
