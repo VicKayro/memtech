@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import FileUpload from '@/components/file-upload';
 import StepIndicator from '@/components/step-indicator';
+import { parseFileClientSide } from '@/lib/client-parsers';
 
 export default function NewProject() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
 
   const handleSubmit = async () => {
@@ -28,6 +30,7 @@ export default function NewProject() {
 
     try {
       // 1. Create project
+      setProgress('Création du dossier...');
       const projRes = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -36,51 +39,49 @@ export default function NewProject() {
       const project = await projRes.json();
       if (!projRes.ok) throw new Error(project.error);
 
-      // 2. Upload files one by one (Vercel 4.5MB body limit)
-      const allResults: { name: string; status: string; error?: string }[] = [];
-      for (const file of files) {
-        const formData = new FormData();
-        formData.set('project_id', project.id);
-        formData.append('files', file);
-
+      // 2. Parse files client-side (avoids Vercel body size limit)
+      const documents: { name: string; content: string }[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setProgress(`Extraction du texte : ${file.name} (${i + 1}/${files.length})...`);
         try {
-          const uploadRes = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
+          const content = await parseFileClientSide(file);
+          if (content.trim().length === 0) {
+            throw new Error('Aucun texte extrait (le fichier est peut-être un scan/image)');
+          }
+          documents.push({ name: file.name, content });
+        } catch (err) {
+          documents.push({
+            name: file.name,
+            content: `[ERREUR EXTRACTION: ${err instanceof Error ? err.message : 'Erreur'}]`,
           });
-
-          if (uploadRes.status === 413) {
-            allResults.push({
-              name: file.name,
-              status: 'error',
-              error: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} MB, max ~4 MB). Réduisez la taille ou convertissez en texte.`,
-            });
-            continue;
-          }
-
-          const uploadData = await uploadRes.json();
-          if (!uploadRes.ok) {
-            allResults.push({ name: file.name, status: 'error', error: uploadData.error });
-          } else {
-            allResults.push(...uploadData.results);
-          }
-        } catch {
-          allResults.push({ name: file.name, status: 'error', error: 'Erreur réseau' });
         }
       }
 
-      const errors = allResults.filter((r) => r.status === 'error');
+      // 3. Send extracted text to API (small JSON, no file size issue)
+      setProgress('Enregistrement des documents...');
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: project.id, documents }),
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.error);
+
+      // Check for errors
+      const errors = uploadData.results.filter(
+        (r: { status: string }) => r.status === 'error'
+      );
       if (errors.length > 0 && errors.length === files.length) {
-        throw new Error(
-          `Tous les fichiers ont échoué : ${errors[0].error}`
-        );
+        throw new Error(`Tous les fichiers ont échoué : ${errors[0].error}`);
       }
 
-      // 3. Navigate to analysis
+      // 4. Navigate to analysis
       router.push(`/projects/${project.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inattendue');
       setUploading(false);
+      setProgress('');
     }
   };
 
@@ -131,7 +132,7 @@ export default function NewProject() {
             {uploading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Upload et traitement en cours...
+                {progress || 'Traitement en cours...'}
               </>
             ) : (
               <>
