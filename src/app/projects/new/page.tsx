@@ -45,7 +45,7 @@ export default function NewProject() {
         const file = files[i];
         setProgress(`Extraction du texte : ${file.name} (${i + 1}/${files.length})...`);
         try {
-          const content = await parseFileClientSide(file);
+          const content = await parseFileClientSide(file, (msg) => setProgress(msg));
           if (content.trim().length === 0) {
             throw new Error('Aucun texte extrait (le fichier est peut-être un scan/image)');
           }
