@@ -100,6 +100,8 @@ export interface OutlineSection {
   id: string;
   title: string;
   type: SectionType;
+  criterion_ref: string | null;
+  weight: number | null;
   description: string;
   key_points: string[];
   importance: 'haute' | 'moyenne' | 'basse';

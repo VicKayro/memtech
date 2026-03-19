@@ -173,6 +173,11 @@ export default function OutlinePage() {
                         {SECTION_TYPE_LABELS[section.type as SectionType] ?? section.type}
                       </span>
                     )}
+                    {section.weight && (
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">
+                        {section.weight} pts
+                      </span>
+                    )}
                     <span
                       className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${IMPORTANCE_COLORS[section.importance]}`}
                     >

@@ -84,6 +84,7 @@ export async function POST(req: Request) {
         .join('\n\n---\n\n');
 
       const sectionType: SectionType = section.type || 'autre';
+      const sectionWeight: number | null = section.weight ?? null;
 
       const content = await callClaude(
         GENERATION_SYSTEM,
@@ -94,11 +95,13 @@ export async function POST(req: Request) {
           section.description,
           section.key_points,
           section.importance,
+          sectionWeight,
+          section.criterion_ref ?? null,
           analysisContext,
           knowledgeText,
           examplesText
         ),
-        { maxTokens: 6144 }
+        { maxTokens: 8192 }
       );
 
       // Build sources list

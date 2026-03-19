@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import StepIndicator from '@/components/step-indicator';
 import type { Project, GeneratedSection, SectionSource } from '@/types';
+import { generateDocx } from '@/lib/docx-export';
 
 export default function DraftPage() {
   const params = useParams();
@@ -26,6 +27,7 @@ export default function DraftPage() {
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const [regenerating, setRegenerating] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState(false);
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
@@ -134,7 +136,7 @@ export default function DraftPage() {
     return md;
   };
 
-  const handleExport = () => {
+  const handleExportMd = () => {
     const text = buildExportMarkdown();
     const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -143,6 +145,30 @@ export default function DraftPage() {
     a.download = `memoire-technique-${project?.name?.replace(/\s+/g, '-').toLowerCase() ?? 'draft'}.md`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportDocx = async () => {
+    if (!project) return;
+    setExportingDocx(true);
+    try {
+      const blob = await generateDocx({
+        projectName: project.name,
+        marketObject: project.analysis?.market_object ?? undefined,
+        marketType: project.analysis?.market_type ?? undefined,
+        sections: sections.map((s) => ({
+          title: s.title,
+          content: s.content ?? '',
+        })),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `memoire-technique-${project.name?.replace(/\s+/g, '-').toLowerCase() ?? 'draft'}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingDocx(false);
+    }
   };
 
   if (!project) {
@@ -176,11 +202,23 @@ export default function DraftPage() {
               {copied ? 'Copié !' : 'Copier tout'}
             </button>
             <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-700 transition-colors"
+              onClick={handleExportMd}
+              className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 bg-white border border-gray-200 rounded-lg px-3 py-2 transition-colors"
             >
               <Download className="h-3.5 w-3.5" />
-              Exporter .md
+              .md
+            </button>
+            <button
+              onClick={handleExportDocx}
+              disabled={exportingDocx}
+              className="flex items-center gap-1.5 text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              {exportingDocx ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Exporter .docx
             </button>
           </div>
         )}

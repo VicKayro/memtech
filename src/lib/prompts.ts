@@ -39,18 +39,20 @@ Réponds avec ce JSON exact (remplis chaque champ, utilise un tableau vide [] si
 // OUTLINE
 // ---------------------------------------------------------------------------
 
-export const OUTLINE_SYSTEM = `Tu es un expert en rédaction de mémoires techniques BTP pour marchés publics français. Tu proposes des plans de mémoire technique structurés, pertinents et adaptés au dossier.
+export const OUTLINE_SYSTEM = `Tu es un expert en rédaction de mémoires techniques BTP pour marchés publics français. Tu proposes des plans de mémoire technique dont la structure est CALQUÉE sur les critères de notation du RC.
 
-Tu t'appuies sur les bonnes pratiques de rédaction de mémoires techniques :
-- Commencer par la présentation de l'entreprise puis la compréhension du besoin
-- Structurer par thèmes métier (méthodologie, moyens, planning, qualité, sécurité, environnement)
-- Adapter le plan aux critères de notation du marché
-- Mettre en avant les sections à forte pondération
-- Terminer par les références et les engagements
+## RÈGLE FONDAMENTALE
 
-Chaque section doit être typée pour appliquer le bon formalisme de rédaction.
+La structure du mémoire technique doit REFLÉTER les critères d'évaluation du Règlement de Consultation. C'est la méthode utilisée par les entreprises BTP qui gagnent des marchés :
 
-Types de sections disponibles :
+1. **Chaque critère/sous-critère du RC doit avoir au moins une section dédiée**
+2. **Les titres des sections doivent reprendre ou refléter le libellé des critères**
+3. **Le volume de contenu est PROPORTIONNEL au poids du critère** — un critère à 20 pts mérite 4x plus de contenu qu'un critère à 5 pts
+4. **Les sections à forte pondération peuvent être découpées en plusieurs sous-sections**
+
+## Types de sections disponibles
+
+Chaque section doit être typée pour appliquer le bon formalisme :
 - presentation : Présentation de l'entreprise (fiche identité, organigramme, qualifications)
 - comprehension : Compréhension du projet et des enjeux
 - methodologie : Méthodologie d'exécution / Note méthodologique
@@ -66,17 +68,27 @@ Types de sections disponibles :
 
 Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`;
 
-export function outlinePrompt(analysis: string): string {
-  return `À partir de l'analyse suivante d'un appel d'offres BTP, propose un plan détaillé de mémoire technique.
+export function outlinePrompt(analysis: string, criteriaFormatted: string): string {
+  return `À partir de l'analyse suivante d'un appel d'offres BTP, propose un plan détaillé de mémoire technique CALQUÉ sur les critères de notation.
 
-ANALYSE DU DOSSIER :
+══════════════════════════════════════════════
+CRITÈRES DE NOTATION DU RC (extraits de l'analyse) :
+${criteriaFormatted}
+══════════════════════════════════════════════
+
+ANALYSE COMPLÈTE DU DOSSIER :
 ${analysis}
 
-Le plan doit :
-- Couvrir toutes les attentes identifiées dans l'analyse
-- Prioriser les sections selon les critères de notation
-- Être directement exploitable pour la rédaction
-- Chaque section doit avoir un TYPE parmi la liste définie
+══════════════════════════════════════════════
+
+## CONSIGNES DE CONSTRUCTION DU PLAN
+
+1. **CHAQUE critère/sous-critère listé ci-dessus DOIT avoir au moins une section dédiée**
+2. Les titres des sections doivent REPRENDRE ou REFLÉTER le libellé exact des critères du RC
+3. Le champ "weight" doit contenir le nombre de points du critère correspondant (ou null si pas de pondération)
+4. Le champ "criterion_ref" doit contenir le nom du critère du RC auquel cette section répond
+5. Un critère à forte pondération (≥20 pts) peut être découpé en PLUSIEURS sections
+6. Ajouter des sections complémentaires si nécessaire (présentation entreprise, conclusion) même si elles ne correspondent pas directement à un critère noté
 
 Réponds avec ce JSON exact :
 
@@ -85,9 +97,11 @@ Réponds avec ce JSON exact :
   "sections": [
     {
       "id": "1",
-      "title": "Titre de la section",
+      "title": "Titre de la section (reflétant le critère du RC)",
       "type": "presentation | comprehension | methodologie | moyens_humains | moyens_materiels | planning | qualite | securite | environnement | references | engagement | autre",
-      "description": "Description courte du contenu attendu dans cette section",
+      "criterion_ref": "Nom du critère du RC correspondant ou null",
+      "weight": 20,
+      "description": "Description du contenu attendu",
       "key_points": ["point clé 1", "point clé 2"],
       "importance": "haute | moyenne | basse"
     }
@@ -95,8 +109,7 @@ Réponds avec ce JSON exact :
 }
 \`\`\`
 
-Propose entre 6 et 12 sections. Numérote les id de 1 à N.
-Chaque type ne doit être utilisé qu'une seule fois, sauf "autre".`;
+Propose entre 6 et 15 sections. Numérote les id de 1 à N.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,10 +148,8 @@ Tu produis des sections au formalisme professionnel attendu par les évaluateurs
 2. **Corps structuré** (sous-titres, tableaux, listes — adapté au type de section)
 3. **Engagement de section** (1-2 phrases d'engagement concret et mesurable)
 
-### Longueur cible
-- Section **haute** importance : 600–1000 mots
-- Section **moyenne** importance : 400–600 mots
-- Section **basse** importance : 250–400 mots`;
+### Longueur cible (proportionnelle au poids du critère)
+La longueur sera précisée dans chaque demande de section en fonction du poids du critère RC correspondant. Respecte la fourchette indiquée.`;
 
 // ---------------------------------------------------------------------------
 // Section-type-specific formatting directives
@@ -422,6 +433,21 @@ Adapte la structure au contenu attendu en respectant le formalisme du mémoire t
 - [À COMPLÉTER] pour les données manquantes`,
 };
 
+// Compute target word count from criterion weight
+function computeWordTarget(weight: number | null, importance: string): string {
+  if (weight !== null && weight > 0) {
+    if (weight >= 30) return '1000–1500 mots';
+    if (weight >= 20) return '800–1200 mots';
+    if (weight >= 10) return '500–800 mots';
+    if (weight >= 5) return '300–500 mots';
+    return '200–350 mots';
+  }
+  // Fallback to importance if no weight
+  if (importance === 'haute') return '600–1000 mots';
+  if (importance === 'moyenne') return '400–600 mots';
+  return '250–400 mots';
+}
+
 export function generateSectionPrompt(
   sectionNumber: number,
   sectionTitle: string,
@@ -429,18 +455,25 @@ export function generateSectionPrompt(
   sectionDescription: string,
   keyPoints: string[],
   importance: string,
+  weight: number | null,
+  criterionRef: string | null,
   analysisContext: string,
   knowledgeBlocks: string,
   examples: string
 ): string {
   const directive = SECTION_DIRECTIVES[sectionType] || SECTION_DIRECTIVES.autre;
+  const wordTarget = computeWordTarget(weight, importance);
+  const criterionLine = criterionRef
+    ? `CRITÈRE RC CORRESPONDANT : "${criterionRef}" (${weight ?? '?'} points)`
+    : '';
 
   return `Rédige la section ${sectionNumber} du mémoire technique.
 
 ══════════════════════════════════════════════
 SECTION ${sectionNumber} : ${sectionTitle}
 TYPE : ${sectionType}
-IMPORTANCE : ${importance}
+${criterionLine}
+LONGUEUR CIBLE : ${wordTarget}
 ══════════════════════════════════════════════
 
 DESCRIPTION DU CONTENU ATTENDU :
@@ -460,6 +493,7 @@ ${knowledgeBlocks ? `CONTENUS INTERNES DE L'ENTREPRISE (à réutiliser et adapte
 CONSIGNES DE RÉDACTION FINALES :
 - Commence directement par le contenu (sous-titre ## ou paragraphe d'accroche). NE RÉPÈTE PAS le numéro ni le titre de la section.
 - Les tableaux sont OBLIGATOIRES quand les directives ci-dessus les demandent.
+- Respecte la LONGUEUR CIBLE de ${wordTarget} — c'est proportionnel au poids du critère dans la notation.
 - Utilise [À COMPLÉTER] pour toute donnée chiffrée absente — n'invente rien.
 - Cite les articles du CCTP/CCAP quand tu fais référence à des exigences du dossier.
 - Termine par 1-2 phrases d'engagement concret.

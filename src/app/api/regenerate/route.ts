@@ -52,6 +52,7 @@ export async function POST(req: Request) {
     ]);
 
     const sectionType: SectionType = outlineSection.type || 'autre';
+    const sectionWeight: number | null = outlineSection.weight ?? null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sectionIndex = (project.outline as any[]).indexOf(outlineSection);
 
@@ -64,6 +65,8 @@ export async function POST(req: Request) {
         outlineSection.description,
         outlineSection.key_points,
         outlineSection.importance || 'moyenne',
+        sectionWeight,
+        outlineSection.criterion_ref ?? null,
         JSON.stringify(project.analysis, null, 2),
         (knowledgeRes.data ?? [])
           .map((k) => `[${k.category} — ${k.title}]\n${k.content}`)
@@ -72,7 +75,7 @@ export async function POST(req: Request) {
           .map((e) => `[${e.section_type} — ${e.title}]\n${e.content}`)
           .join('\n\n---\n\n')
       ),
-      { maxTokens: 6144 }
+      { maxTokens: 8192 }
     );
 
     const { data, error } = await supabase

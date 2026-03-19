@@ -22,9 +22,16 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Format criteria explicitly for the prompt
+    const analysis = project.analysis as Record<string, unknown>;
+    const criteria = (analysis.criteria ?? []) as { name: string; weight: string | null; description: string }[];
+    const criteriaFormatted = criteria.length > 0
+      ? criteria.map((c, i) => `${i + 1}. ${c.name} — ${c.weight ?? 'non pondéré'} points : ${c.description}`).join('\n')
+      : 'Aucun critère de notation explicite trouvé dans le RC. Utilise les bonnes pratiques BTP standard.';
+
     const result = await callClaudeJSON<{ sections: OutlineSection[] }>(
       OUTLINE_SYSTEM,
-      outlinePrompt(JSON.stringify(project.analysis, null, 2)),
+      outlinePrompt(JSON.stringify(project.analysis, null, 2), criteriaFormatted),
       4096
     );
 
