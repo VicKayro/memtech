@@ -36,25 +36,43 @@ export default function NewProject() {
       const project = await projRes.json();
       if (!projRes.ok) throw new Error(project.error);
 
-      // 2. Upload files
-      const formData = new FormData();
-      formData.set('project_id', project.id);
-      files.forEach((f) => formData.append('files', f));
+      // 2. Upload files one by one (Vercel 4.5MB body limit)
+      const allResults: { name: string; status: string; error?: string }[] = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.set('project_id', project.id);
+        formData.append('files', file);
 
-      const uploadRes = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(uploadData.error);
+        try {
+          const uploadRes = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
 
-      // Check for upload errors
-      const errors = uploadData.results.filter(
-        (r: { status: string }) => r.status === 'error'
-      );
+          if (uploadRes.status === 413) {
+            allResults.push({
+              name: file.name,
+              status: 'error',
+              error: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} MB, max ~4 MB). Réduisez la taille ou convertissez en texte.`,
+            });
+            continue;
+          }
+
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok) {
+            allResults.push({ name: file.name, status: 'error', error: uploadData.error });
+          } else {
+            allResults.push(...uploadData.results);
+          }
+        } catch {
+          allResults.push({ name: file.name, status: 'error', error: 'Erreur réseau' });
+        }
+      }
+
+      const errors = allResults.filter((r) => r.status === 'error');
       if (errors.length > 0 && errors.length === files.length) {
         throw new Error(
-          `Erreur sur tous les fichiers : ${errors[0].error}`
+          `Tous les fichiers ont échoué : ${errors[0].error}`
         );
       }
 
