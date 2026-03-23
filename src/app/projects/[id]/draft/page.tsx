@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -29,14 +29,104 @@ export default function DraftPage() {
   const [copied, setCopied] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
 
+  // Generation progress
+  const [generating, setGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState({ current: 0, total: 0, title: '' });
+  const generatingRef = useRef(false);
+
+  // Load project and sections
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
       .then((r) => r.json())
       .then((data) => {
         setProject(data.project);
         setSections(data.sections);
+
+        // Auto-start generation if there are pending sections
+        const pending = (data.sections as GeneratedSection[]).filter(
+          (s) => s.status === 'pending'
+        );
+        if (pending.length > 0 && !generatingRef.current) {
+          startGeneration(data.sections);
+        }
       });
-  }, [projectId]);
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startGeneration = useCallback(
+    async (currentSections: GeneratedSection[]) => {
+      if (generatingRef.current) return;
+      generatingRef.current = true;
+      setGenerating(true);
+
+      const pending = currentSections.filter((s) => s.status === 'pending');
+      const total = currentSections.length;
+
+      for (let i = 0; i < pending.length; i++) {
+        const section = pending[i];
+        const overallIndex = currentSections.findIndex((s) => s.id === section.id);
+
+        setGenProgress({
+          current: total - pending.length + i + 1,
+          total,
+          title: section.title,
+        });
+
+        // Update local state to show 'generating'
+        setSections((prev) =>
+          prev.map((s) =>
+            s.id === section.id ? { ...s, status: 'generating' as const } : s
+          )
+        );
+
+        try {
+          const res = await fetch('/api/generate-section', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              section_id: section.id,
+              project_id: projectId,
+            }),
+          });
+
+          if (res.ok) {
+            const generated = await res.json();
+            setSections((prev) =>
+              prev.map((s) => (s.id === section.id ? generated : s))
+            );
+          } else {
+            // Mark as failed but continue with next sections
+            const errData = await res.json().catch(() => ({ error: 'Erreur serveur' }));
+            console.error(`Erreur section "${section.title}":`, errData.error);
+            setSections((prev) =>
+              prev.map((s) =>
+                s.id === section.id
+                  ? { ...s, status: 'pending' as const, content: `[Erreur: ${errData.error}]` }
+                  : s
+              )
+            );
+          }
+        } catch (err) {
+          console.error(`Erreur réseau section "${section.title}":`, err);
+          setSections((prev) =>
+            prev.map((s) =>
+              s.id === section.id ? { ...s, status: 'pending' as const } : s
+            )
+          );
+        }
+      }
+
+      // Mark project as generated
+      await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'generated' }),
+      });
+
+      setGenerating(false);
+      generatingRef.current = false;
+    },
+    [projectId]
+  );
 
   const toggleSources = (id: string) => {
     setExpandedSources((prev) => {
@@ -86,53 +176,22 @@ export default function DraftPage() {
     });
     const analysis = project?.analysis;
 
-    // Page de garde
-    let md = '';
-    md += `# MÉMOIRE TECHNIQUE\n\n`;
-    md += `---\n\n`;
-    md += `| | |\n`;
-    md += `|---|---|\n`;
+    let md = `# MÉMOIRE TECHNIQUE\n\n---\n\n`;
+    md += `| | |\n|---|---|\n`;
     md += `| **Objet du marché** | ${name} |\n`;
-    if (analysis?.market_object) {
-      md += `| **Description** | ${analysis.market_object} |\n`;
-    }
-    if (analysis?.market_type) {
-      md += `| **Type de marché** | ${analysis.market_type} |\n`;
-    }
+    if (analysis?.market_object) md += `| **Description** | ${analysis.market_object} |\n`;
+    if (analysis?.market_type) md += `| **Type de marché** | ${analysis.market_type} |\n`;
     md += `| **Maître d'ouvrage** | [À COMPLÉTER] |\n`;
     md += `| **Lot** | [À COMPLÉTER] |\n`;
     md += `| **Entreprise candidate** | [À COMPLÉTER] |\n`;
-    md += `| **Date** | ${date} |\n`;
-    md += `\n---\n\n`;
-
-    // Sommaire
+    md += `| **Date** | ${date} |\n\n---\n\n`;
     md += `## SOMMAIRE\n\n`;
+    sections.forEach((s, i) => { md += `${i + 1}. ${s.title}\n`; });
+    md += `\n---\n\n`;
     sections.forEach((s, i) => {
-      md += `${i + 1}. ${s.title}\n`;
+      md += `# ${i + 1}. ${s.title}\n\n${s.content ?? '[Section non générée]'}\n\n---\n\n`;
     });
-    md += `\n---\n\n`;
-
-    // Sections
-    sections.forEach((s, i) => {
-      md += `# ${i + 1}. ${s.title}\n\n`;
-      md += `${s.content ?? '[Section non générée]'}\n\n`;
-      if (i < sections.length - 1) {
-        md += `---\n\n`;
-      }
-    });
-
-    // Annexes
-    md += `\n---\n\n`;
-    md += `# ANNEXES\n\n`;
-    md += `- Attestations de bonne exécution\n`;
-    md += `- Qualifications et certifications\n`;
-    md += `- Attestations d'assurance (RC et décennale)\n`;
-    md += `- CV des intervenants clés\n`;
-    md += `- Planning détaillé\n`;
-    md += `- Plan d'installation de chantier\n`;
-    md += `\n---\n\n`;
-    md += `*Document généré le ${date} — à compléter et personnaliser avant soumission.*\n`;
-
+    md += `# ANNEXES\n\n- Attestations de bonne exécution\n- Qualifications et certifications\n- Attestations d'assurance\n- CV des intervenants clés\n- Planning détaillé\n- Plan d'installation de chantier\n\n---\n\n*Document généré le ${date}*\n`;
     return md;
   };
 
@@ -155,10 +214,7 @@ export default function DraftPage() {
         projectName: project.name,
         marketObject: project.analysis?.market_object ?? undefined,
         marketType: project.analysis?.market_type ?? undefined,
-        sections: sections.map((s) => ({
-          title: s.title,
-          content: s.content ?? '',
-        })),
+        sections: sections.map((s) => ({ title: s.title, content: s.content ?? '' })),
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -175,17 +231,42 @@ export default function DraftPage() {
     return <div className="text-center py-20 text-gray-400">Chargement...</div>;
   }
 
-  const allGenerated = sections.every((s) => s.status === 'generated');
+  const generatedCount = sections.filter((s) => s.status === 'generated').length;
+  const allGenerated = generatedCount === sections.length && sections.length > 0;
 
   return (
     <div className="max-w-4xl mx-auto">
       <StepIndicator current={4} />
 
+      {/* Generation progress banner */}
+      {generating && (
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl px-6 py-4">
+          <div className="flex items-center gap-3 mb-2">
+            <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+            <span className="font-medium text-blue-900">
+              Génération en cours — section {genProgress.current}/{genProgress.total}
+            </span>
+          </div>
+          <p className="text-sm text-blue-700 ml-8">
+            {genProgress.title}
+          </p>
+          <div className="mt-3 ml-8 bg-blue-100 rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-blue-600 h-full rounded-full transition-all duration-500"
+              style={{ width: `${(genProgress.current / genProgress.total) * 100}%` }}
+            />
+          </div>
+          <p className="text-xs text-blue-500 mt-1 ml-8">
+            ~{Math.max(0, genProgress.total - genProgress.current)} section{genProgress.total - genProgress.current > 1 ? 's' : ''} restante{genProgress.total - genProgress.current > 1 ? 's' : ''} • Les sections apparaissent au fur et à mesure
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Brouillon du mémoire technique</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {project.name} — {sections.length} sections
+            {project.name} — {generatedCount}/{sections.length} sections générées
           </p>
         </div>
         {allGenerated && (
@@ -199,7 +280,7 @@ export default function DraftPage() {
               ) : (
                 <Copy className="h-3.5 w-3.5" />
               )}
-              {copied ? 'Copié !' : 'Copier tout'}
+              {copied ? 'Copié !' : 'Copier'}
             </button>
             <button
               onClick={handleExportMd}
@@ -229,23 +310,38 @@ export default function DraftPage() {
           const isRegenerating = regenerating.has(section.id);
           const sources = (section.sources ?? []) as SectionSource[];
           const showSources = expandedSources.has(section.id);
+          const isGenerating = section.status === 'generating' || isRegenerating;
 
           return (
             <div
               key={section.id}
-              className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+              className={`bg-white rounded-xl border overflow-hidden transition-colors ${
+                isGenerating ? 'border-blue-200' : 'border-gray-200'
+              }`}
             >
               {/* Section header */}
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-blue-600 bg-blue-50 w-7 h-7 flex items-center justify-center rounded-lg">
-                    {(index + 1).toString().padStart(2, '0')}
+                  <span
+                    className={`text-xs font-bold w-7 h-7 flex items-center justify-center rounded-lg ${
+                      section.status === 'generated'
+                        ? 'text-green-600 bg-green-50'
+                        : isGenerating
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-400 bg-gray-50'
+                    }`}
+                  >
+                    {section.status === 'generated' ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      (index + 1).toString().padStart(2, '0')
+                    )}
                   </span>
                   <h2 className="font-semibold text-gray-900">{section.title}</h2>
                 </div>
                 <div className="flex items-center gap-2">
-                  {section.status === 'generating' || isRegenerating ? (
-                    <span className="flex items-center gap-1.5 text-xs text-yellow-600">
+                  {isGenerating ? (
+                    <span className="flex items-center gap-1.5 text-xs text-blue-600">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       Génération...
                     </span>
@@ -263,7 +359,7 @@ export default function DraftPage() {
                 </div>
               </div>
 
-              {/* Section content — rendered as Markdown */}
+              {/* Section content */}
               <div className="px-6 py-5">
                 {section.content ? (
                   <div className="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-headings:font-semibold prose-h2:text-base prose-h2:mt-6 prose-h2:mb-3 prose-h3:text-sm prose-h3:mt-4 prose-h3:mb-2 prose-table:text-xs prose-th:bg-gray-50 prose-th:font-semibold prose-th:text-gray-700 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-1.5 prose-td:border-gray-200 prose-strong:text-gray-900 prose-li:my-0.5">
@@ -273,9 +369,14 @@ export default function DraftPage() {
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-400 text-sm">
-                    {section.status === 'generating'
-                      ? 'Génération en cours...'
-                      : 'En attente de génération'}
+                    {isGenerating ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Rédaction en cours...
+                      </div>
+                    ) : (
+                      'En attente de génération'
+                    )}
                   </div>
                 )}
               </div>
@@ -289,21 +390,14 @@ export default function DraftPage() {
                   >
                     <span className="flex items-center gap-1.5">
                       <BookOpen className="h-3.5 w-3.5" />
-                      {sources.length} source{sources.length > 1 ? 's' : ''} utilisée{sources.length > 1 ? 's' : ''}
+                      {sources.length} source{sources.length > 1 ? 's' : ''}
                     </span>
-                    {showSources ? (
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    ) : (
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    )}
+                    {showSources ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                   </button>
                   {showSources && (
                     <div className="px-6 pb-4 space-y-2">
                       {sources.map((src, i) => (
-                        <div
-                          key={i}
-                          className="bg-gray-50 rounded-lg px-3 py-2"
-                        >
+                        <div key={i} className="bg-gray-50 rounded-lg px-3 py-2">
                           <div className="flex items-center gap-2 mb-0.5">
                             <span
                               className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
@@ -314,9 +408,7 @@ export default function DraftPage() {
                             >
                               {src.type === 'knowledge' ? 'Base interne' : 'Exemple'}
                             </span>
-                            <span className="text-xs font-medium text-gray-700">
-                              {src.name}
-                            </span>
+                            <span className="text-xs font-medium text-gray-700">{src.name}</span>
                           </div>
                           <p className="text-[11px] text-gray-400">{src.excerpt}</p>
                         </div>

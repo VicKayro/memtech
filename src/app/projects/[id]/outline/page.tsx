@@ -88,6 +88,7 @@ export default function OutlinePage() {
     setGenerating(true);
     setError('');
     try {
+      // Create pending sections and navigate immediately
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -95,6 +96,7 @@ export default function OutlinePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      // Navigate to draft page — it will trigger generation section by section
       router.push(`/projects/${projectId}/draft`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
