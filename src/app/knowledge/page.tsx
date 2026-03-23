@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Database, X } from 'lucide-react';
+import { Plus, Trash2, Database, X, Upload } from 'lucide-react';
+import KnowledgeImportModal from '@/components/knowledge-import-modal';
 import type { KnowledgeBlock } from '@/types';
 import { KNOWLEDGE_CATEGORIES } from '@/types';
 
@@ -9,6 +10,7 @@ export default function KnowledgePage() {
   const [blocks, setBlocks] = useState<KnowledgeBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [formData, setFormData] = useState({
     category: 'methodologie',
     title: '',
@@ -52,6 +54,14 @@ export default function KnowledgePage() {
     }
   };
 
+  const handleImportComplete = () => {
+    // Refresh all blocks from the server
+    fetch('/api/knowledge')
+      .then((r) => r.json())
+      .then((data) => setBlocks(data))
+      .catch(() => {});
+  };
+
   const grouped = KNOWLEDGE_CATEGORIES.map((cat) => ({
     ...cat,
     blocks: blocks.filter((b) => b.category === cat.value),
@@ -66,14 +76,31 @@ export default function KnowledgePage() {
             Ajoutez vos contenus types : moyens, méthodologie, références, certifications...
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Ajouter un bloc
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors"
+          >
+            <Upload className="h-4 w-4" />
+            Importer des mémoires
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Ajouter un bloc
+          </button>
+        </div>
       </div>
+
+      {/* Import modal */}
+      {showImport && (
+        <KnowledgeImportModal
+          onClose={() => setShowImport(false)}
+          onImportComplete={handleImportComplete}
+        />
+      )}
 
       {/* Add form modal */}
       {showForm && (

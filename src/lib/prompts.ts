@@ -701,6 +701,54 @@ export function formatCompanyData(profile: CompanyProfile, sectionType: string):
   return parts.join('\n\n');
 }
 
+// ---------------------------------------------------------------------------
+// Knowledge import — segment a previous mémoire technique into blocks
+// ---------------------------------------------------------------------------
+
+export const SEGMENTATION_SYSTEM = `Tu es un expert en mémoires techniques BTP. Tu analyses un mémoire technique existant et tu le segmentes en blocs de connaissance réutilisables.
+
+RÈGLE CRITIQUE : tu dois EXTRAIRE le contenu VERBATIM du document. Ne reformule pas, ne résume pas, ne paraphrase pas. Copie les paragraphes tels quels. L'objectif est de capturer le style et les formulations exactes de l'entreprise.
+
+Si un passage couvre plusieurs catégories, duplique-le dans chaque catégorie pertinente.
+
+Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`;
+
+export function segmentationPrompt(documentText: string, documentName: string): string {
+  return `Segmente le mémoire technique suivant en blocs de connaissance réutilisables.
+
+DOCUMENT : ${documentName}
+───────────────────────────────────────
+${documentText}
+───────────────────────────────────────
+
+Pour chaque bloc identifié, donne :
+- category : une parmi [moyens_humains, moyens_materiels, methodologie, qualite, securite, environnement, references, process, entreprise, certifications]
+- title : un titre court descriptif (ex: "Équipe type chantier CVC", "Politique tri des déchets")
+- content : le texte VERBATIM extrait du document (plusieurs paragraphes si nécessaire)
+
+IMPORTANT :
+- Extrais le contenu MOT POUR MOT. Pas de reformulation.
+- Ignore les parties trop spécifiques à un marché particulier (numéros de lots, montants exacts, dates précises de chantier) SAUF si elles constituent des références chantiers (category: references).
+- Ignore la page de garde, les sommaires, les numéros de page.
+- Chaque bloc doit être autonome et réutilisable pour un futur mémoire.
+- Préfère des blocs de 100-800 mots. Découpe les sections trop longues en sous-blocs logiques.
+- Extrais TOUS les blocs pertinents — ne te limite pas.
+
+Réponds avec ce JSON exact :
+
+\`\`\`json
+{
+  "blocks": [
+    {
+      "category": "...",
+      "title": "...",
+      "content": "..."
+    }
+  ]
+}
+\`\`\``;
+}
+
 export function classifyDocumentPrompt(filename: string, contentPreview: string): string {
   return `Classifie ce document d'appel d'offres BTP.
 
