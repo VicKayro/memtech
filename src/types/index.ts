@@ -59,6 +59,99 @@ export interface Analysis {
   resource_requirements: string[];
   specific_constraints: string[];
   key_warnings: string[];
+  norms_cited: string[];
+  page_limit: number | null;
+  page_format: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Company Profile
+// ---------------------------------------------------------------------------
+
+export interface CompanyInfo {
+  name: string;
+  legal_form: string;
+  siret: string;
+  address: string;
+  creation_date: string;
+  headcount: number | null;
+  revenue_n1: string;
+  revenue_n2: string;
+  revenue_n3: string;
+  activity_description: string;
+  insurance_rc: string;
+  insurance_decennale: string;
+}
+
+export interface PersonnelMember {
+  id: string;
+  name: string;
+  role: string;
+  qualifications: string[];
+  experience_years: number | null;
+  certifications: string[];
+  availability: string;
+}
+
+export interface EquipmentItem {
+  id: string;
+  name: string;
+  characteristics: string;
+  quantity: number;
+  ownership: 'propre' | 'location' | 'sous-traitance';
+  last_inspection: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  specialty: string;
+  location: string;
+  certifications: string[];
+}
+
+export interface ProjectReference {
+  id: string;
+  name: string;
+  client: string;
+  nature: string;
+  amount_ht: string;
+  year: string;
+  duration: string;
+  similarities: string;
+  contact_name: string;
+  contact_phone: string;
+}
+
+export interface Certification {
+  id: string;
+  name: string;
+  reference: string;
+  organism: string;
+  validity: string;
+}
+
+export interface SafetyIndicators {
+  tf: string;
+  tg: string;
+  nb_accidents_n1: string;
+  nb_accidents_n2: string;
+  sst_count: string;
+  safety_budget: string;
+}
+
+export interface CompanyProfile {
+  id: string;
+  is_default: boolean;
+  company_info: CompanyInfo;
+  personnel: PersonnelMember[];
+  equipment: EquipmentItem[];
+  suppliers: Supplier[];
+  project_references: ProjectReference[];
+  certifications: Certification[];
+  safety_indicators: SafetyIndicators;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Criterion {

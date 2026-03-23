@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { callClaude } from '@/lib/anthropic';
-import { GENERATION_SYSTEM, generateSectionPrompt } from '@/lib/prompts';
-import type { SectionType } from '@/types';
+import { GENERATION_SYSTEM, generateSectionPrompt, formatCompanyData } from '@/lib/prompts';
+import type { SectionType, CompanyProfile, Analysis, OutlineSection } from '@/types';
 
 export async function POST(req: Request) {
   const { section_id } = await req.json();
@@ -45,16 +45,32 @@ export async function POST(req: Request) {
     .eq('id', section_id);
 
   try {
-    // Get knowledge and examples
-    const [knowledgeRes, examplesRes] = await Promise.all([
+    // Get knowledge, examples, and company profile
+    const [knowledgeRes, examplesRes, companyRes] = await Promise.all([
       supabase.from('knowledge_blocks').select('*'),
       supabase.from('memory_examples').select('*'),
+      supabase.from('company_profiles').select('*').eq('is_default', true).maybeSingle(),
     ]);
 
     const sectionType: SectionType = outlineSection.type || 'autre';
     const sectionWeight: number | null = outlineSection.weight ?? null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sectionIndex = (project.outline as any[]).indexOf(outlineSection);
+
+    // Company data formatting
+    const companyProfile = companyRes.data as CompanyProfile | null;
+    const companyData = companyProfile ? formatCompanyData(companyProfile, sectionType) : undefined;
+
+    // Norms whitelist from analysis
+    const analysis = project.analysis as Analysis;
+    const normsCited = analysis?.norms_cited?.length ? analysis.norms_cited : undefined;
+
+    // Page budget from analysis
+    const outlineSections = project.outline as OutlineSection[];
+    const pageBudget = analysis?.page_limit ? {
+      pageLimit: analysis.page_limit,
+      totalWeight: outlineSections.reduce((sum: number, s: OutlineSection) => sum + (s.weight ?? 0), 0),
+    } : null;
 
     const content = await callClaude(
       GENERATION_SYSTEM,
@@ -73,7 +89,10 @@ export async function POST(req: Request) {
           .join('\n\n---\n\n'),
         (examplesRes.data ?? [])
           .map((e) => `[${e.section_type} — ${e.title}]\n${e.content}`)
-          .join('\n\n---\n\n')
+          .join('\n\n---\n\n'),
+        companyData,
+        normsCited,
+        pageBudget
       ),
       { maxTokens: 8192 }
     );

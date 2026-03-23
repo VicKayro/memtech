@@ -1,3 +1,5 @@
+import type { CompanyProfile } from '@/types';
+
 export const ANALYSIS_SYSTEM = `Tu es un expert en appels d'offres BTP et marchés publics français. Tu analyses les documents d'un dossier de consultation et tu extrais les informations clés de manière structurée.
 
 Tu dois être précis, factuel, et ne rien inventer. Si une information n'est pas présente dans les documents, ne l'ajoute pas.
@@ -30,7 +32,10 @@ Réponds avec ce JSON exact (remplis chaque champ, utilise un tableau vide [] si
   "environmental_requirements": ["démarche environnementale, gestion déchets, nuisances"],
   "resource_requirements": ["moyens humains et matériels demandés"],
   "specific_constraints": ["site occupé, travaux en milieu habité, accès, etc."],
-  "key_warnings": ["points de vigilance, éléments discriminants ou pièges potentiels"]
+  "key_warnings": ["points de vigilance, éléments discriminants ou pièges potentiels"],
+  "norms_cited": ["liste VERBATIM de toutes les normes, DTU, réglementations et références normatives citées dans les documents (ex: NF EN 206-1, DTU 31.2, RT 2012, RE 2020, NF P 01-012, etc.). Copie exacte depuis le texte, sans inventer de norme."],
+  "page_limit": "nombre de pages max du mémoire technique si précisé dans le RC (nombre entier ou null)",
+  "page_format": "format de page si précisé (A4, A3, recto-verso, etc.) ou null"
 }
 \`\`\``;
 }
@@ -122,6 +127,24 @@ Tu produis des sections au formalisme professionnel attendu par les évaluateurs
 
 ---
 
+## RÈGLE CRITIQUE — DONNÉES ENTREPRISE
+
+Si des DONNÉES PROFIL ENTREPRISE sont fournies dans le prompt :
+- **UTILISE-LES systématiquement** : vrais noms de personnel, vrai matériel, vraies références, vraies certifications, vrais indicateurs sécurité
+- **NE METS PAS [À COMPLÉTER]** pour les informations déjà fournies dans le profil entreprise
+- Intègre les données de manière naturelle dans le texte et les tableaux
+- Adapte les données au contexte spécifique du marché (ne cite que le personnel/matériel pertinent pour ce chantier)
+- Si une donnée du profil n'est pas pertinente pour cette section, ne la force pas
+
+## RÈGLE CRITIQUE — NORMES ET RÉFÉRENCES NORMATIVES
+
+Si une LISTE DE NORMES AUTORISÉES est fournie dans le prompt :
+- Cite UNIQUEMENT les normes présentes dans cette liste
+- Pour toute norme que tu voudrais citer mais qui n'est PAS dans la liste, utilise [À VÉRIFIER : norme supposée]
+- Ne cite JAMAIS une norme inventée ou approximative
+
+---
+
 ## FORMAT DE SORTIE — MARKDOWN STRUCTURÉ
 
 ### Mise en forme obligatoire
@@ -133,7 +156,7 @@ Tu produis des sections au formalisme professionnel attendu par les évaluateurs
 - **Listes numérotées** : pour les phases, étapes, processus séquentiels
 - **Listes à puces** : pour les énumérations non ordonnées
 - **Gras** : pour les termes techniques clés, les engagements et les points différenciants
-- **\`[À COMPLÉTER]\`** ou **\`[À COMPLÉTER PAR L'ENTREPRISE]\`** : pour TOUTE donnée chiffrée non disponible — n'invente JAMAIS de chiffre
+- **\`[À COMPLÉTER]\`** ou **\`[À COMPLÉTER PAR L'ENTREPRISE]\`** : UNIQUEMENT pour les données absentes du profil entreprise ET de la base interne — n'invente JAMAIS de chiffre
 
 ### Conventions BTP obligatoires
 - **Références DCE** : cite les articles du CCTP/CCAP/RC quand tu fais référence à des exigences spécifiques du dossier. Exemple : "Conformément à l'article 4.2.3 du CCTP, les travaux de ravalement devront..."
@@ -433,8 +456,22 @@ Adapte la structure au contenu attendu en respectant le formalisme du mémoire t
 - [À COMPLÉTER] pour les données manquantes`,
 };
 
-// Compute target word count from criterion weight
-function computeWordTarget(weight: number | null, importance: string): string {
+// Compute target word count from criterion weight, optionally using page budget
+function computeWordTarget(
+  weight: number | null,
+  importance: string,
+  pageBudget?: { pageLimit: number; totalWeight: number } | null,
+): string {
+  // If we have a page budget AND a weight, use proportional allocation
+  if (pageBudget && weight !== null && weight > 0 && pageBudget.totalWeight > 0) {
+    const totalWords = pageBudget.pageLimit * 600; // ~600 words per page
+    const sectionWords = Math.round((weight / pageBudget.totalWeight) * totalWords);
+    const lo = Math.max(150, Math.round(sectionWords * 0.8));
+    const hi = Math.round(sectionWords * 1.2);
+    return `${lo}–${hi} mots`;
+  }
+
+  // Fallback: weight-based
   if (weight !== null && weight > 0) {
     if (weight >= 30) return '1000–1500 mots';
     if (weight >= 20) return '800–1200 mots';
@@ -459,12 +496,29 @@ export function generateSectionPrompt(
   criterionRef: string | null,
   analysisContext: string,
   knowledgeBlocks: string,
-  examples: string
+  examples: string,
+  companyData?: string,
+  normsCited?: string[],
+  pageBudget?: { pageLimit: number; totalWeight: number } | null,
 ): string {
   const directive = SECTION_DIRECTIVES[sectionType] || SECTION_DIRECTIVES.autre;
-  const wordTarget = computeWordTarget(weight, importance);
+  const wordTarget = computeWordTarget(weight, importance, pageBudget);
   const criterionLine = criterionRef
     ? `CRITÈRE RC CORRESPONDANT : "${criterionRef}" (${weight ?? '?'} points)`
+    : '';
+
+  const companyBlock = companyData
+    ? `══════════════════════════════════════════════
+DONNÉES PROFIL ENTREPRISE (données réelles — UTILISE-LES, ne mets PAS [À COMPLÉTER] pour ces informations) :
+${companyData}
+══════════════════════════════════════════════\n\n`
+    : '';
+
+  const normsBlock = normsCited && normsCited.length > 0
+    ? `══════════════════════════════════════════════
+NORMES AUTORISÉES (extraites du CCTP/DCE — cite UNIQUEMENT celles-ci) :
+${normsCited.map((n) => `- ${n}`).join('\n')}
+══════════════════════════════════════════════\n\n`
     : '';
 
   return `Rédige la section ${sectionNumber} du mémoire technique.
@@ -484,7 +538,7 @@ ${keyPoints.map((p, i) => `  ${i + 1}. ${p}`).join('\n')}
 
 ${directive}
 
-──────────────────────────────────────────────
+${companyBlock}${normsBlock}──────────────────────────────────────────────
 CONTEXTE DU MARCHÉ (extrait de l'analyse du dossier) :
 ${analysisContext}
 ──────────────────────────────────────────────
@@ -494,10 +548,139 @@ CONSIGNES DE RÉDACTION FINALES :
 - Commence directement par le contenu (sous-titre ## ou paragraphe d'accroche). NE RÉPÈTE PAS le numéro ni le titre de la section.
 - Les tableaux sont OBLIGATOIRES quand les directives ci-dessus les demandent.
 - Respecte la LONGUEUR CIBLE de ${wordTarget} — c'est proportionnel au poids du critère dans la notation.
-- Utilise [À COMPLÉTER] pour toute donnée chiffrée absente — n'invente rien.
+- Si des données entreprise sont fournies ci-dessus, UTILISE-LES (vrais noms, vrai matériel, vraies références). Mets [À COMPLÉTER] UNIQUEMENT pour ce qui manque.
 - Cite les articles du CCTP/CCAP quand tu fais référence à des exigences du dossier.
 - Termine par 1-2 phrases d'engagement concret.
 - Si tu réutilises des contenus de la base interne, indique [Sources internes : titre1, titre2] à la toute fin.`;
+}
+
+// ---------------------------------------------------------------------------
+// Company data formatting — selects relevant data per section type
+// ---------------------------------------------------------------------------
+
+export function formatCompanyData(profile: CompanyProfile, sectionType: string): string {
+  const parts: string[] = [];
+  const info = profile.company_info;
+
+  // Identity info — always useful for presentation, engagement, comprehension
+  if (info?.name) {
+    const identityTypes = ['presentation', 'comprehension', 'engagement', 'autre'];
+    if (identityTypes.includes(sectionType)) {
+      const lines = [
+        `Raison sociale : ${info.name}`,
+        info.legal_form && `Forme juridique : ${info.legal_form}`,
+        info.siret && `SIRET : ${info.siret}`,
+        info.address && `Adresse : ${info.address}`,
+        info.creation_date && `Création : ${info.creation_date}`,
+        info.headcount && `Effectif : ${info.headcount} salariés`,
+        info.revenue_n1 && `CA N-1 : ${info.revenue_n1}`,
+        info.revenue_n2 && `CA N-2 : ${info.revenue_n2}`,
+        info.revenue_n3 && `CA N-3 : ${info.revenue_n3}`,
+        info.activity_description && `Activité : ${info.activity_description}`,
+        info.insurance_rc && `Assurance RC : ${info.insurance_rc}`,
+        info.insurance_decennale && `Assurance décennale : ${info.insurance_decennale}`,
+      ].filter(Boolean);
+      parts.push(`### Identité entreprise\n${lines.join('\n')}`);
+    }
+  }
+
+  // Personnel — moyens_humains, methodologie, planning, securite
+  if (profile.personnel?.length > 0) {
+    const personnelTypes = ['moyens_humains', 'methodologie', 'planning', 'securite', 'presentation', 'engagement'];
+    if (personnelTypes.includes(sectionType)) {
+      const lines = profile.personnel.map((p) => {
+        const details = [
+          p.role,
+          p.experience_years && `${p.experience_years} ans d'exp.`,
+          p.qualifications?.length && `Qualif: ${p.qualifications.join(', ')}`,
+          p.certifications?.length && `Certif: ${p.certifications.join(', ')}`,
+          p.availability && `Dispo: ${p.availability}`,
+        ].filter(Boolean).join(' | ');
+        return `- **${p.name}** — ${details}`;
+      });
+      parts.push(`### Personnel\n${lines.join('\n')}`);
+    }
+  }
+
+  // Equipment — moyens_materiels, methodologie, planning
+  if (profile.equipment?.length > 0) {
+    const equipTypes = ['moyens_materiels', 'methodologie', 'planning'];
+    if (equipTypes.includes(sectionType)) {
+      const lines = profile.equipment.map((e) => {
+        const details = [
+          e.characteristics,
+          `Qté: ${e.quantity}`,
+          `${e.ownership}`,
+          e.last_inspection && `Contrôle: ${e.last_inspection}`,
+        ].filter(Boolean).join(' | ');
+        return `- **${e.name}** — ${details}`;
+      });
+      parts.push(`### Matériel\n${lines.join('\n')}`);
+    }
+  }
+
+  // Suppliers — moyens_materiels, methodologie, environnement
+  if (profile.suppliers?.length > 0) {
+    const supplierTypes = ['moyens_materiels', 'methodologie', 'environnement'];
+    if (supplierTypes.includes(sectionType)) {
+      const lines = profile.suppliers.map((s) => {
+        const details = [s.specialty, s.location, s.certifications?.length && `Certif: ${s.certifications.join(', ')}`].filter(Boolean).join(' | ');
+        return `- **${s.name}** — ${details}`;
+      });
+      parts.push(`### Fournisseurs\n${lines.join('\n')}`);
+    }
+  }
+
+  // References — references, presentation, comprehension, engagement
+  if (profile.project_references?.length > 0) {
+    const refTypes = ['references', 'presentation', 'comprehension', 'engagement'];
+    if (refTypes.includes(sectionType)) {
+      const lines = profile.project_references.map((r) => {
+        const details = [
+          r.client,
+          r.nature,
+          r.amount_ht && `${r.amount_ht} HT`,
+          r.year,
+          r.duration,
+          r.similarities,
+          r.contact_name && `Ref: ${r.contact_name} ${r.contact_phone || ''}`,
+        ].filter(Boolean).join(' | ');
+        return `- **${r.name}** — ${details}`;
+      });
+      parts.push(`### Références chantiers\n${lines.join('\n')}`);
+    }
+  }
+
+  // Certifications — qualite, securite, environnement, presentation
+  if (profile.certifications?.length > 0) {
+    const certTypes = ['qualite', 'securite', 'environnement', 'presentation', 'engagement'];
+    if (certTypes.includes(sectionType)) {
+      const lines = profile.certifications.map((c) => {
+        const details = [c.reference, c.organism, c.validity && `Valide: ${c.validity}`].filter(Boolean).join(' | ');
+        return `- **${c.name}** — ${details}`;
+      });
+      parts.push(`### Certifications\n${lines.join('\n')}`);
+    }
+  }
+
+  // Safety indicators — securite, qualite
+  if (profile.safety_indicators) {
+    const safetyTypes = ['securite', 'qualite', 'presentation'];
+    const si = profile.safety_indicators;
+    if (safetyTypes.includes(sectionType) && (si.tf || si.tg)) {
+      const lines = [
+        si.tf && `Taux de fréquence (TF) : ${si.tf}`,
+        si.tg && `Taux de gravité (TG) : ${si.tg}`,
+        si.nb_accidents_n1 && `Accidents avec arrêt N-1 : ${si.nb_accidents_n1}`,
+        si.nb_accidents_n2 && `Accidents avec arrêt N-2 : ${si.nb_accidents_n2}`,
+        si.sst_count && `Nombre de SST : ${si.sst_count}`,
+        si.safety_budget && `Budget sécurité annuel : ${si.safety_budget}`,
+      ].filter(Boolean);
+      parts.push(`### Indicateurs sécurité\n${lines.join('\n')}`);
+    }
+  }
+
+  return parts.join('\n\n');
 }
 
 export function classifyDocumentPrompt(filename: string, contentPreview: string): string {

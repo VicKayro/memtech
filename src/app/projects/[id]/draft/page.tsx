@@ -15,6 +15,7 @@ import {
   Check,
 } from 'lucide-react';
 import StepIndicator from '@/components/step-indicator';
+import BriefSheet from '@/components/brief-sheet';
 import type { Project, GeneratedSection, SectionSource } from '@/types';
 import { generateDocx } from '@/lib/docx-export';
 
@@ -304,6 +305,9 @@ export default function DraftPage() {
           </div>
         )}
       </div>
+
+      {/* Brief Sheet — shows remaining placeholders */}
+      {allGenerated && <BriefSheet sections={sections} />}
 
       <div className="space-y-6">
         {sections.map((section, index) => {

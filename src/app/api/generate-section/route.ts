@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { callClaude } from '@/lib/anthropic';
-import { GENERATION_SYSTEM, generateSectionPrompt } from '@/lib/prompts';
-import type { OutlineSection, SectionType } from '@/types';
+import { GENERATION_SYSTEM, generateSectionPrompt, formatCompanyData } from '@/lib/prompts';
+import type { OutlineSection, SectionType, CompanyProfile, Analysis } from '@/types';
 
 export const maxDuration = 120; // 2 min per section max
 
@@ -47,10 +47,11 @@ export async function POST(req: Request) {
     .eq('id', section_id);
 
   try {
-    // Get knowledge blocks and examples
-    const [knowledgeRes, examplesRes] = await Promise.all([
+    // Get knowledge blocks, examples, and company profile
+    const [knowledgeRes, examplesRes, companyRes] = await Promise.all([
       supabase.from('knowledge_blocks').select('*'),
       supabase.from('memory_examples').select('*'),
+      supabase.from('company_profiles').select('*').eq('is_default', true).maybeSingle(),
     ]);
 
     const knowledgeBlocks = knowledgeRes.data ?? [];
@@ -71,6 +72,20 @@ export async function POST(req: Request) {
     const sectionType: SectionType = outlineSection.type || 'autre';
     const sectionWeight: number | null = outlineSection.weight ?? null;
 
+    // Company data formatting
+    const companyProfile = companyRes.data as CompanyProfile | null;
+    const companyData = companyProfile ? formatCompanyData(companyProfile, sectionType) : undefined;
+
+    // Norms whitelist from analysis
+    const analysis = project.analysis as Analysis;
+    const normsCited = analysis?.norms_cited?.length ? analysis.norms_cited : undefined;
+
+    // Page budget from analysis
+    const pageBudget = analysis?.page_limit ? {
+      pageLimit: analysis.page_limit,
+      totalWeight: outline.reduce((sum: number, s: OutlineSection) => sum + (s.weight ?? 0), 0),
+    } : null;
+
     const content = await callClaude(
       GENERATION_SYSTEM,
       generateSectionPrompt(
@@ -84,7 +99,10 @@ export async function POST(req: Request) {
         outlineSection.criterion_ref ?? null,
         JSON.stringify(project.analysis, null, 2),
         knowledgeText,
-        examplesText
+        examplesText,
+        companyData,
+        normsCited,
+        pageBudget
       ),
       { maxTokens: 8192 }
     );

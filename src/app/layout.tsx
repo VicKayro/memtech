@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Link from 'next/link';
-import { FileText, Database } from 'lucide-react';
+import { FileText, Database, Building2 } from 'lucide-react';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -31,6 +31,13 @@ export default function RootLayout({
                 className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Dossiers
+              </Link>
+              <Link
+                href="/company"
+                className="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1.5"
+              >
+                <Building2 className="h-3.5 w-3.5" />
+                Mon entreprise
               </Link>
               <Link
                 href="/knowledge"
