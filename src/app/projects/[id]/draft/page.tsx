@@ -237,7 +237,7 @@ export default function DraftPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <StepIndicator current={4} />
+      <StepIndicator current={5} />
 
       {/* Generation progress banner */}
       {generating && (

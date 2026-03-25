@@ -6,7 +6,8 @@ const STEPS = [
   { id: 1, label: 'Upload' },
   { id: 2, label: 'Analyse' },
   { id: 3, label: 'Trame' },
-  { id: 4, label: 'Brouillon' },
+  { id: 4, label: 'Chiffrage' },
+  { id: 5, label: 'Brouillon' },
 ];
 
 interface StepIndicatorProps {

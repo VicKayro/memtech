@@ -749,6 +749,226 @@ Réponds avec ce JSON exact :
 \`\`\``;
 }
 
+// ---------------------------------------------------------------------------
+// DPGF Extraction — Extract price items from a DPGF document
+// ---------------------------------------------------------------------------
+
+export const DPGF_EXTRACTION_SYSTEM = `Tu es un expert en chiffrage BTP. Tu analyses un DPGF (Décomposition du Prix Global et Forfaitaire) ou un bordereau de prix et tu extrais chaque ligne de prix de manière structurée.
+
+Tu dois être précis et exhaustif. Extrais TOUTES les lignes de prix trouvées dans le document.
+
+Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`;
+
+export function dpgfExtractionPrompt(documentText: string, projectName?: string): string {
+  return `Analyse le DPGF/bordereau de prix suivant et extrais chaque ligne de prix.
+
+DOCUMENT :
+───────────────────────────────────────
+${documentText}
+───────────────────────────────────────
+
+Pour chaque ligne de prix identifiée, extrais :
+- category : une parmi [gros_oeuvre, second_oeuvre, vrd, cvc, electricite, menuiserie, peinture, etancheite, demolition, terrassement, charpente, autre]
+- subcategory : sous-catégorie si identifiable (ex: fondations, voiles, planchers)
+- designation : intitulé exact de la ligne
+- unit : unité (m³, m², ml, u, kg, t, forfait, h, j, ens)
+- unit_price : prix unitaire HT (nombre décimal ou null si non trouvé)
+- qty : quantité (nombre ou null)
+- notes : remarques éventuelles
+
+IMPORTANT :
+- Extrais TOUTES les lignes, y compris les sous-totaux si ils correspondent à des postes identifiables
+- Ne regroupe pas les lignes — conserve le niveau de détail du document
+- Convertis les prix en nombres (pas de texte comme "15,50 €", utilise 15.50)
+- Si le prix est vide ou illisible, mets null
+- Catégorise au mieux selon le contenu technique de la ligne
+
+Réponds avec ce JSON exact :
+
+\`\`\`json
+{
+  "lines": [
+    {
+      "category": "...",
+      "subcategory": "...",
+      "designation": "...",
+      "unit": "...",
+      "unit_price": 0.00,
+      "qty": 0,
+      "notes": "..."
+    }
+  ],
+  "project_name": "${projectName || 'Non spécifié'}",
+  "total_lines": 0
+}
+\`\`\``;
+}
+
+// ---------------------------------------------------------------------------
+// Quote Parsing — Extract line items from a supplier quote
+// ---------------------------------------------------------------------------
+
+export const QUOTE_PARSING_SYSTEM = `Tu es un expert en analyse de devis BTP. Tu extrais les lignes de prix d'un devis fournisseur de manière structurée.
+
+Tu dois être précis et conserver l'intitulé exact de chaque poste. Ne reformule pas les désignations.
+
+Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`;
+
+export function quoteParsingPrompt(documentText: string, supplierName: string): string {
+  return `Analyse le devis suivant du fournisseur "${supplierName}" et extrais chaque ligne de prix.
+
+DEVIS :
+───────────────────────────────────────
+${documentText}
+───────────────────────────────────────
+
+Pour chaque ligne, extrais :
+- designation : intitulé exact du poste
+- unit : unité (m³, m², ml, u, kg, forfait, h, etc.)
+- qty : quantité
+- unit_price : prix unitaire HT
+- total : total HT de la ligne
+
+IMPORTANT :
+- Conserve les désignations VERBATIM du devis
+- Convertis les prix en nombres décimaux (pas de texte)
+- Inclus toutes les lignes, y compris les options éventuelles
+
+Réponds avec ce JSON exact :
+
+\`\`\`json
+{
+  "supplier": "${supplierName}",
+  "lines": [
+    {
+      "designation": "...",
+      "unit": "...",
+      "qty": 0,
+      "unit_price": 0.00,
+      "total": 0.00
+    }
+  ],
+  "total_ht": 0.00
+}
+\`\`\``;
+}
+
+// ---------------------------------------------------------------------------
+// Quote Alignment — Align line items across multiple supplier quotes
+// ---------------------------------------------------------------------------
+
+export const QUOTE_ALIGNMENT_SYSTEM = `Tu es un expert en comparaison de devis BTP. Tu alignes les lignes de prix de plusieurs devis fournisseurs pour créer un tableau comparatif.
+
+Les fournisseurs ne formulent pas toujours les postes de la même manière. Tu dois faire un matching sémantique : regrouper les lignes qui correspondent au même ouvrage/prestation même si la désignation est légèrement différente.
+
+Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`;
+
+export function quoteAlignmentPrompt(
+  parsedQuotes: Array<{ supplier: string; lines: Array<{ designation: string; unit: string; qty: number; unit_price: number; total: number }> }>
+): string {
+  const quotesText = parsedQuotes.map((q) =>
+    `FOURNISSEUR: ${q.supplier}\n${q.lines.map((l, i) => `  ${i + 1}. ${l.designation} | ${l.unit} | Qté: ${l.qty} | PU: ${l.unit_price}€ | Total: ${l.total}€`).join('\n')}`
+  ).join('\n\n');
+
+  const supplierNames = parsedQuotes.map((q) => q.supplier);
+
+  return `Aligne les lignes de prix des devis suivants pour créer un comparatif.
+
+DEVIS À COMPARER :
+═══════════════════════════════════════
+${quotesText}
+═══════════════════════════════════════
+
+FOURNISSEURS : ${supplierNames.join(', ')}
+
+CONSIGNES :
+1. Regroupe les lignes qui correspondent au MÊME poste/ouvrage (matching sémantique)
+2. Utilise la désignation la plus claire/complète comme référence
+3. Pour chaque ligne alignée, indique le prix de chaque fournisseur (null si le poste n'existe pas chez ce fournisseur)
+4. Conserve les lignes uniques à un seul fournisseur
+5. Standardise les unités quand possible
+
+Réponds avec ce JSON exact :
+
+\`\`\`json
+{
+  "aligned_lines": [
+    {
+      "designation": "Désignation de référence",
+      "unit": "m²",
+      "qty": 100,
+      "prices": {
+        ${supplierNames.map((s) => `"${s}": 0.00`).join(',\n        ')}
+      }
+    }
+  ],
+  "totals": {
+    ${supplierNames.map((s) => `"${s}": 0.00`).join(',\n    ')}
+  }
+}
+\`\`\``;
+}
+
+// ---------------------------------------------------------------------------
+// Price Suggestion — Suggest prices from Bible for an outline
+// ---------------------------------------------------------------------------
+
+export const PRICE_SUGGESTION_SYSTEM = `Tu es un expert en chiffrage BTP. À partir d'un plan de mémoire technique et d'une base de prix historiques, tu proposes des lignes de chiffrage pertinentes.
+
+Tu dois faire correspondre les sections du plan aux prix disponibles dans la base. Propose des quantités estimatives réalistes basées sur le contexte du projet.
+
+Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`;
+
+export function priceSuggestionPrompt(
+  outlineSections: Array<{ title: string; type: string; description: string }>,
+  availablePrices: Array<{ id: string; category: string; designation: string; unit: string; unit_price: number | null }>,
+  projectContext: string
+): string {
+  const outlineText = outlineSections.map((s, i) =>
+    `${i + 1}. [${s.type}] ${s.title}\n   ${s.description}`
+  ).join('\n');
+
+  const pricesText = availablePrices.map((p) =>
+    `- [${p.id}] ${p.designation} (${p.unit}) — ${p.unit_price != null ? p.unit_price + '€' : 'prix inconnu'} | Cat: ${p.category}`
+  ).join('\n');
+
+  return `À partir du plan de mémoire technique et de la base de prix historiques ci-dessous, propose des lignes de chiffrage estimatif pour ce projet.
+
+CONTEXTE DU PROJET :
+${projectContext}
+
+PLAN DU MÉMOIRE TECHNIQUE :
+${outlineText}
+
+BASE DE PRIX DISPONIBLES :
+${pricesText}
+
+CONSIGNES :
+1. Sélectionne les prix pertinents pour le projet
+2. Propose des quantités estimatives réalistes
+3. Groupe les lignes par section/lot
+4. N'invente PAS de prix — utilise uniquement ceux de la base
+5. Si un poste n'a pas de prix dans la base, indique le avec unit_price: null
+
+Réponds avec ce JSON exact :
+
+\`\`\`json
+{
+  "suggested_lines": [
+    {
+      "price_item_id": "uuid du prix dans la base",
+      "designation": "...",
+      "unit": "...",
+      "qty": 0,
+      "unit_price": 0.00,
+      "total": 0.00,
+      "rationale": "Justification courte de la quantité estimée"
+    }
+  ]
+}
+\`\`\``;
+}
+
 export function classifyDocumentPrompt(filename: string, contentPreview: string): string {
   return `Classifie ce document d'appel d'offres BTP.
 

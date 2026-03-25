@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Link from 'next/link';
-import { FileText, Database, Building2 } from 'lucide-react';
+import { FileText, Database, Building2, BookOpen, Scale } from 'lucide-react';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -45,6 +45,20 @@ export default function RootLayout({
               >
                 <Database className="h-3.5 w-3.5" />
                 Base interne
+              </Link>
+              <Link
+                href="/prices"
+                className="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1.5"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                Bible de prix
+              </Link>
+              <Link
+                href="/quotes"
+                className="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1.5"
+              >
+                <Scale className="h-3.5 w-3.5" />
+                Comparatifs
               </Link>
             </div>
           </div>

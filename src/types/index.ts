@@ -206,6 +206,92 @@ export interface SectionSource {
   excerpt: string;
 }
 
+// ---------------------------------------------------------------------------
+// Bible de prix (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface PriceItem {
+  id: string;
+  category: string;
+  subcategory: string | null;
+  designation: string;
+  unit: string;
+  unit_price: number | null;
+  source_project: string | null;
+  source_year: string | null;
+  notes: string | null;
+  carbon_kg_per_unit: number | null;
+  created_at: string;
+}
+
+export const PRICE_CATEGORIES = [
+  { value: 'gros_oeuvre', label: 'Gros œuvre' },
+  { value: 'second_oeuvre', label: 'Second œuvre' },
+  { value: 'vrd', label: 'VRD' },
+  { value: 'cvc', label: 'CVC / Plomberie' },
+  { value: 'electricite', label: 'Électricité' },
+  { value: 'menuiserie', label: 'Menuiserie' },
+  { value: 'peinture', label: 'Peinture / Revêtements' },
+  { value: 'etancheite', label: 'Étanchéité / Couverture' },
+  { value: 'demolition', label: 'Démolition / Désamiantage' },
+  { value: 'terrassement', label: 'Terrassement' },
+  { value: 'charpente', label: 'Charpente / Structure' },
+  { value: 'autre', label: 'Autre' },
+] as const;
+
+export const PRICE_UNITS = [
+  'm³', 'm²', 'ml', 'u', 'kg', 't', 'forfait', 'h', 'j', 'ens',
+] as const;
+
+// ---------------------------------------------------------------------------
+// Comparaison de devis (Phase 2)
+// ---------------------------------------------------------------------------
+
+export interface QuoteSupplier {
+  name: string;
+  file_name: string;
+}
+
+export interface QuoteLineItem {
+  designation: string;
+  unit: string;
+  qty: number | null;
+  prices: Record<string, number | null>; // supplier name → price
+}
+
+export interface QuoteComparison {
+  id: string;
+  project_id: string | null;
+  name: string;
+  suppliers: QuoteSupplier[];
+  line_items: QuoteLineItem[];
+  status: 'pending' | 'analyzing' | 'done';
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Chiffrage rapide / Estimation (Phase 3)
+// ---------------------------------------------------------------------------
+
+export interface EstimateLineItem {
+  price_item_id: string | null;
+  designation: string;
+  unit: string;
+  qty: number;
+  unit_price: number;
+  total: number;
+  carbon_kg_per_unit?: number | null;
+}
+
+export interface ProjectEstimate {
+  id: string;
+  project_id: string;
+  line_items: EstimateLineItem[];
+  total_ht: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const DOCUMENT_TYPES = [
   { value: 'rc', label: 'RC (Règlement de Consultation)' },
   { value: 'cctp', label: 'CCTP (Cahier des Clauses Techniques)' },

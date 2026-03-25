@@ -12,7 +12,9 @@ import {
   Edit3,
   Check,
   X,
+  Calculator,
 } from 'lucide-react';
+import Link from 'next/link';
 import StepIndicator from '@/components/step-indicator';
 import type { Project, OutlineSection, SectionType } from '@/types';
 import { SECTION_TYPE_LABELS } from '@/types';
@@ -223,12 +225,19 @@ export default function OutlinePage() {
         ))}
       </div>
 
-      <div className="mt-8 text-center">
+      <div className="mt-8 flex items-center justify-center gap-4">
         {error && (
-          <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
+          <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 mb-4 w-full">
             {error}
           </div>
         )}
+        <Link
+          href={`/projects/${project.id}/estimate`}
+          className="inline-flex items-center gap-2 border border-emerald-300 text-emerald-700 bg-emerald-50 px-5 py-3 rounded-lg font-medium hover:bg-emerald-100 transition-colors text-sm"
+        >
+          <Calculator className="h-4 w-4" />
+          Chiffrage estimatif
+        </Link>
         <button
           onClick={handleGenerate}
           disabled={generating || sections.length === 0}
