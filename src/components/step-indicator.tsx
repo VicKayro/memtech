@@ -3,11 +3,11 @@
 import { Check } from 'lucide-react';
 
 const STEPS = [
-  { id: 1, label: 'Upload' },
-  { id: 2, label: 'Analyse' },
-  { id: 3, label: 'Trame' },
-  { id: 4, label: 'Chiffrage' },
-  { id: 5, label: 'Brouillon' },
+  { id: 1, label: 'Upload', optional: false },
+  { id: 2, label: 'Analyse', optional: false },
+  { id: 3, label: 'Trame', optional: false },
+  { id: 4, label: 'Chiffrage', optional: true },
+  { id: 5, label: 'Brouillon', optional: false },
 ];
 
 interface StepIndicatorProps {
@@ -26,7 +26,9 @@ export default function StepIndicator({ current }: StepIndicatorProps) {
                   ? 'bg-blue-600 text-white'
                   : step.id === current
                     ? 'bg-blue-600 text-white ring-4 ring-blue-100'
-                    : 'bg-gray-200 text-gray-500'
+                    : step.optional
+                      ? 'bg-gray-100 text-gray-400 border-2 border-dashed border-gray-300'
+                      : 'bg-gray-200 text-gray-500'
               }`}
             >
               {step.id < current ? (
@@ -35,18 +37,25 @@ export default function StepIndicator({ current }: StepIndicatorProps) {
                 step.id
               )}
             </div>
-            <span
-              className={`text-sm font-medium ${
-                step.id <= current ? 'text-gray-900' : 'text-gray-400'
-              }`}
-            >
-              {step.label}
-            </span>
+            <div className="flex flex-col">
+              <span
+                className={`text-sm font-medium leading-tight ${
+                  step.id <= current ? 'text-gray-900' : 'text-gray-400'
+                }`}
+              >
+                {step.label}
+              </span>
+              {step.optional && step.id > current && (
+                <span className="text-[10px] text-gray-400 leading-tight">optionnel</span>
+              )}
+            </div>
           </div>
           {i < STEPS.length - 1 && (
             <div
-              className={`w-12 h-0.5 mx-3 ${
+              className={`h-0.5 mx-3 ${
                 step.id < current ? 'bg-blue-600' : 'bg-gray-200'
+              } ${
+                step.optional || STEPS[i + 1]?.optional ? 'w-8 border-t-2 border-dashed border-gray-300 bg-transparent' : 'w-12'
               }`}
             />
           )}

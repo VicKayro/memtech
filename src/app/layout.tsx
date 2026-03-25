@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Link from 'next/link';
-import { FileText, Database, Building2, BookOpen, Scale } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'MemTech — Générateur de Mémoires Techniques BTP',
-  description: 'Transformez vos appels d\'offres en mémoires techniques exploitables',
+  title: 'MemTech — Mémoires Techniques & Chiffrage BTP',
+  description: 'Mémoires techniques, chiffrage et comparatifs de devis pour le BTP',
 };
 
 export default function RootLayout({
@@ -25,39 +25,41 @@ export default function RootLayout({
               <FileText className="h-5 w-5 text-blue-600" />
               MemTech
             </Link>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-1">
+              {/* Primary — le flow principal */}
               <Link
                 href="/"
-                className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-md transition-colors font-medium"
               >
-                Dossiers
+                Mes projets
               </Link>
+
+              {/* Separator */}
+              <div className="w-px h-5 bg-gray-200 mx-2" />
+
+              {/* Secondary — outils & config */}
               <Link
                 href="/company"
-                className="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1.5"
+                className="text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 px-2.5 py-1.5 rounded-md transition-colors"
               >
-                <Building2 className="h-3.5 w-3.5" />
-                Mon entreprise
+                Entreprise
               </Link>
               <Link
                 href="/knowledge"
-                className="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1.5"
+                className="text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 px-2.5 py-1.5 rounded-md transition-colors"
               >
-                <Database className="h-3.5 w-3.5" />
                 Base interne
               </Link>
               <Link
                 href="/prices"
-                className="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1.5"
+                className="text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 px-2.5 py-1.5 rounded-md transition-colors"
               >
-                <BookOpen className="h-3.5 w-3.5" />
                 Bible de prix
               </Link>
               <Link
                 href="/quotes"
-                className="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1.5"
+                className="text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 px-2.5 py-1.5 rounded-md transition-colors"
               >
-                <Scale className="h-3.5 w-3.5" />
                 Comparatifs
               </Link>
             </div>

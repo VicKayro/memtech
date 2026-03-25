@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, Sparkles, Download, Calculator, Leaf } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Sparkles, Download, Calculator, Leaf, BookOpen, ArrowRight } from 'lucide-react';
 import type { Project, EstimateLineItem, PriceItem } from '@/types';
 import { PRICE_UNITS } from '@/types';
 
@@ -188,6 +188,27 @@ export default function EstimatePage() {
           </button>
         </div>
       </div>
+
+      {/* Contextual hint if Bible is empty */}
+      {prices.length === 0 && lines.length === 0 && (
+        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BookOpen className="h-5 w-5 text-amber-600 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-900">Votre Bible de prix est vide</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Importez un ancien DPGF pour débloquer les suggestions IA et pré-remplir vos lignes.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/prices"
+            className="flex items-center gap-1 text-sm font-medium text-amber-700 hover:text-amber-900 shrink-0"
+          >
+            Importer des prix <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4 mb-6">
